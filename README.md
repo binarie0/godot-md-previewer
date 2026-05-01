@@ -43,7 +43,7 @@ A lightweight Markdown previewer addon for **Godot 4.4+** that renders `.md` fil
 
 ## Installation
 
-1. Copy the `addons/md_previewer/` folder into your project's `addons/` directory
+1. Copy the `md_previewer/` folder into your project's `addons/` directory
 2. In Godot: **Project → Project Settings → Plugins** → enable **Markdown Previewer**
 3. The **MD Preview** tab appears in the bottom panel
 
