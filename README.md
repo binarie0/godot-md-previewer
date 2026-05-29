@@ -14,6 +14,7 @@ A lightweight Markdown previewer addon for **Godot 4.4+** that renders `.md` fil
 - 🔁 Manual reload button
 - 🖼️ Local and external image rendering (PNG, JPG, WebP, BMP) with auto-retry
 - 🔍 Selectable text
+- ↪ Clickable links!
 - No external dependencies, only GDScript, uses `RichTextLabel` + BBCode
 
 ## Supported Markdown
