@@ -17,6 +17,7 @@ var close_btn: Button
 var reload_btn: Button
 var file_label: Label
 var file_dialog: FileDialog
+var link_label:Label;
 
 # Maps tab index → { path, mtime, bbcode, images, pending_images }
 var tab_data: Array[Dictionary] = []
@@ -58,17 +59,25 @@ func _build_ui() -> void:
 	close_btn.disabled = true
 	toolbar.add_child(close_btn)
 
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	toolbar.add_child(spacer)
-
+	
+	
+	link_label = Label.new()
+	link_label.text = ""
+	link_label.add_theme_color_override("font_color", Color(0.6, 1, 0.8))
+	link_label.add_theme_font_size_override("font_size", 15)
+	link_label.clip_text = true
+	link_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	toolbar.add_child(link_label)
+	
 	file_label = Label.new()
 	file_label.text = "No file open"
 	file_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	file_label.add_theme_font_size_override("font_size", 11)
+	file_label.add_theme_font_size_override("font_size", 15)
 	file_label.clip_text = true
 	file_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	toolbar.add_child(file_label)
+	
+	
 
 	var sep := HSeparator.new()
 	vbox.add_child(sep)
@@ -103,6 +112,8 @@ func _make_preview_rtl() -> RichTextLabel:
 	rtl.add_theme_font_size_override("normal_font_size", 14)
 	rtl.add_theme_color_override("default_color", Color(0.88, 0.88, 0.88))
 	rtl.meta_clicked.connect(_get_meta);
+	rtl.meta_hover_started.connect(_meta_tooltip_hover);
+	rtl.meta_hover_ended.connect(_meta_tooltip_unhover);
 	return rtl
 
 
@@ -669,3 +680,12 @@ func _get_meta(data:String):
 	else:
 		OS.shell_open(data);
 		pass;
+
+func _meta_tooltip_hover(test:Variant):
+	var a := str(test);
+	if (a.begins_with("http")):
+		link_label.text = "web::" + a.get_slice('#', 0).replacen("https://", "");
+	else:
+		link_label.text = "local::" + a;
+func _meta_tooltip_unhover(test:Variant):
+	link_label.text = "";
