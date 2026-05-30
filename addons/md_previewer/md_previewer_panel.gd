@@ -13,20 +13,22 @@ const MAX_IMAGE_WIDTH := 0  # 0 = full width
 var tab_container: TabContainer
 var toolbar: HBoxContainer
 var open_btn: Button
+var new_file_btn : Button;
+var edit_btn: Button
 var close_btn: Button
-var reload_btn: Button
 var file_label: Label
 var file_dialog: FileDialog
 var link_label:Label;
 
-# Maps tab index → { path, mtime, bbcode, images, pending_images }
+
+# Maps tab index → { path, mtime, md,bbcode, images, pending_images }
 var tab_data: Array[Dictionary] = []
 
 # Active HTTP requests: request_node → { tab_idx, image_id, url, timer }
 var active_requests: Dictionary = {}
 
 var reload_timer: float = 0.0
-var RELOAD_INTERVAL: float = 2.0
+var RELOAD_INTERVAL: float = 0.25
 
 
 func _ready() -> void:
@@ -44,15 +46,18 @@ func _build_ui() -> void:
 	toolbar = HBoxContainer.new()
 	toolbar.custom_minimum_size.y = 32
 	vbox.add_child(toolbar)
-
+	new_file_btn = _make_button("📜 Create New", Color(0.98, 0.702, 0.565, 1.0))
+	new_file_btn.pressed.connect(_create_new_tab)
+	toolbar.add_child(new_file_btn)
+	
 	open_btn = _make_button("📂 Open File", Color(0.42, 0.62, 0.87))
 	open_btn.pressed.connect(_on_open_pressed)
 	toolbar.add_child(open_btn)
-
-	reload_btn = _make_button("🔄 Reload", Color(0.56, 0.82, 0.64))
-	reload_btn.pressed.connect(_on_reload_pressed)
-	reload_btn.disabled = true
-	toolbar.add_child(reload_btn)
+	
+	edit_btn = _make_button("✏️ Edit File", Color(0.99, 1.0, 0.586, 1.0))
+	edit_btn.pressed.connect(_edit_current);
+	edit_btn.disabled = true;
+	toolbar.add_child(edit_btn);
 
 	close_btn = _make_button("✕ Close Tab", Color(0.95, 0.54, 0.54))
 	close_btn.pressed.connect(_on_close_pressed)
@@ -114,6 +119,7 @@ func _make_preview_rtl() -> RichTextLabel:
 	rtl.meta_clicked.connect(_get_meta);
 	rtl.meta_hover_started.connect(_meta_tooltip_hover);
 	rtl.meta_hover_ended.connect(_meta_tooltip_unhover);
+	
 	return rtl
 
 
@@ -124,11 +130,10 @@ func _add_empty_tab() -> void:
 	tab_container.add_child(rtl)
 	
 	tab_container.set_tab_title(tab_container.get_tab_count() - 1, "Welcome")
-	tab_data.append({ "path": "", "mtime": 0, "bbcode": "", "images": [], "pending_images": 0 })
+	tab_data.append({ "path": "","md":EMPTY_LABEL, "mtime": 0, "bbcode": "", "images": [], "pending_images": 0 })
 	rtl.parse_bbcode(EMPTY_LABEL)
 	if not tab_container.tab_changed.is_connected(_on_tab_changed):
 		tab_container.tab_changed.connect(_on_tab_changed)
-
 
 # ── File Loading ──────────────────────────────────────────────────────────────
 func _load_files(paths: Array[String]) -> void:
@@ -163,7 +168,7 @@ func _load_file(path: String) -> void:
 	var target_idx: int
 	if empty_idx >= 0:
 		target_idx = empty_idx
-		tab_data[target_idx] = { "path": path, "mtime": _get_mtime(path), "bbcode": bbcode, "images": images, "pending_images": 0 }
+		tab_data[target_idx] = { "path": path, "mtime": _get_mtime(path), "md":md_text, "bbcode": bbcode, "images": images, "pending_images": 0 }
 		tab_container.set_tab_title(target_idx, path.get_file())
 		tab_container.current_tab = target_idx
 	else:
@@ -173,7 +178,7 @@ func _load_file(path: String) -> void:
 		tab_container.add_child(rtl)
 		target_idx = tab_container.get_tab_count() - 1
 		tab_container.set_tab_title(target_idx, path.get_file())
-		tab_data.append({ "path": path, "mtime": _get_mtime(path), "bbcode": bbcode, "images": images, "pending_images": 0 })
+		tab_data.append({ "path": path, "mtime": _get_mtime(path),"md":md_text, "bbcode": bbcode, "images": images, "pending_images": 0 })
 		if not tab_container.tab_changed.is_connected(_on_tab_changed):
 			tab_container.tab_changed.connect(_on_tab_changed)
 		tab_container.current_tab = target_idx
@@ -181,7 +186,6 @@ func _load_file(path: String) -> void:
 	_render_tab(target_idx)
 	_refresh_toolbar()
 	panels.append(path);
-
 
 func _render_tab(tab_idx: int) -> void:
 	if tab_idx < 0 or tab_idx >= tab_data.size():
@@ -517,7 +521,68 @@ func _split_on_placeholders(bbcode: String, images: Array) -> Array:
 
 	return segments
 
+func _create_editor(text:String) -> TextEdit:
+	var newLineEdit := TextEdit.new();
+	newLineEdit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	newLineEdit.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	newLineEdit.set_anchors_preset(Control.PRESET_FULL_RECT);
+	newLineEdit.text = text;
+	return newLineEdit;
 
+func _edit_current() -> void:
+	open_btn.disabled = true;
+	close_btn.disabled = true;
+	tab_container.tabs_visible = false;
+	edit_btn.disabled = false;
+	
+	edit_btn.pressed.disconnect(_edit_current);
+	edit_btn.pressed.connect(_save_current);
+	edit_btn.text = "💾 Save File"
+	edit_btn.add_theme_color_override("font_color", Color(0.628, 0.606, 1.0, 1.0))
+	
+	var idx = tab_container.current_tab;
+	
+	var md:String = tab_data[idx]["md"];
+	var newLineEdit := _create_editor(md);
+	var current_control:Control = tab_container.get_current_tab_control();
+	tab_container.get_current_tab_control().add_child(newLineEdit);
+	pass;
+func _save_current() -> void:
+	var idx = tab_container.current_tab;
+	open_btn.disabled = false;
+	close_btn.disabled = false;
+	tab_container.tabs_visible = true;
+	
+	edit_btn.pressed.disconnect(_save_current);
+	edit_btn.pressed.connect(_edit_current);
+	edit_btn.text = "✏️ Edit File"
+	edit_btn.add_theme_color_override("font_color", Color(0.99, 1.0, 0.586, 1.0))
+	var lineEdit = tab_container.get_current_tab_control().get_child(0) as TextEdit;
+	tab_container.get_current_tab_control().remove_child(lineEdit);
+	
+	var new_md = lineEdit.text;
+	
+	var path = tab_data[idx]["path"];
+	_save_to_file_known(path, new_md);
+
+func _save_to_file_known(path:String, md:String):
+	var fa := FileAccess.open(path,FileAccess.WRITE);
+	fa.store_line(md);
+	fa.close();
+
+func _create_new_tab():
+	var file_dialog = FileDialog.new()
+	file_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	file_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	file_dialog.filters = ["*.md ; Markdown Files", "*.markdown ; Markdown Files"]
+	file_dialog.file_selected.connect(_create_blank_file_and_open);
+	add_child(file_dialog);
+	file_dialog.popup_centered(Vector2(800, 600))
+	pass;
+func _create_blank_file_and_open(path:String):
+	_save_to_file_known(path, "");
+	_load_file(path);
+	_edit_current();
 # ── Reload ────────────────────────────────────────────────────────────────────
 
 func _reload_current() -> void:
@@ -534,6 +599,7 @@ func _reload_current() -> void:
 
 	var result := MarkdownParser.parse(md_text)
 	tab_data[idx]["bbcode"] = result["bbcode"]
+	tab_data[idx]["md"] = md_text
 	tab_data[idx]["images"] = result["images"]
 	tab_data[idx]["mtime"] = _get_mtime(path)
 	tab_data[idx]["pending_images"] = 0
@@ -550,13 +616,13 @@ func _refresh_toolbar() -> void:
 		return
 	var idx := tab_container.current_tab
 	if idx < 0 or idx >= tab_data.size():
-		reload_btn.disabled = true
+		edit_btn.disabled = true
 		close_btn.disabled = true
 		file_label.text = "No file open"
 		return
 	var has_file: bool = (tab_data[idx].path as String) != ""
-	reload_btn.disabled = not has_file
-	close_btn.disabled = false
+	close_btn.disabled = not has_file
+	edit_btn.disabled = close_btn.disabled;
 	file_label.text = tab_data[idx].path as String if has_file else "No file open"
 
 
@@ -641,6 +707,7 @@ func _process(delta: float) -> void:
 			var md_text := fa.get_as_text()
 			fa.close()
 			var result := MarkdownParser.parse(md_text)
+			tab_data[i]["md"] = md_text
 			tab_data[i]["bbcode"] = result["bbcode"]
 			tab_data[i]["images"] = result["images"]
 			tab_data[i]["mtime"] = mtime
