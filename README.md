@@ -1,4 +1,4 @@
-# Godot MD Previewer
+# Godot MD Editor + Previewer
 
 **Version:** 1.1.0 | **Author:** Sebastian Pavel (feat. binarie) | **Godot:** 4.4+
 
